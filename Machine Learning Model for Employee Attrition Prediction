@@ -1,0 +1,260 @@
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+import seaborn as sns
+
+"""##### Load dataset"""
+
+df = pd.read_csv('/content/drive/MyDrive/Colab Notebooks/Attrition/Polaris Data edited.csv')
+df.head()
+
+df.info()
+
+df.drop(df.columns[0], axis=1, inplace=True)
+
+df
+
+"""##### Check Values in the columns"""
+
+# Display values in categorical columns
+cols = [col for col in df.columns if df[col].dtype == 'object']
+num_cols = [col for col in df.columns if df[col].dtype != 'object']
+
+for col in cols:
+    print(f"{col} has {df[col].unique()} values\n")
+
+"""##### Delete some categorical columns as they are not relevant to attrition"""
+
+# List of columns to delete
+columns_to_delete = ['BusinessTravel', 'Department', 'EducationField', 'JobRole', 'Over18']
+
+# Drop the specified columns
+df = df.drop(columns=columns_to_delete, axis=1)
+
+df
+
+"""##### Replace the values of gender and marital status column and convert to numeric"""
+
+# Replace values in the 'Gender' column
+gender_mapping = {'Female': 0, 'Male': 1}
+df['Gender'] = df['Gender'].map(gender_mapping)
+
+# Replace values in the 'MaritalStatus' column
+marital_status_mapping = {'Single': 0, 'Married': 1, 'Divorced': 2, 'Front Desk Officer': 0}
+df['MaritalStatus'] = df['MaritalStatus'].map(marital_status_mapping)
+
+# Convert 'Gender' and 'MaritalStatus' columns to numeric
+df['Gender'] = pd.to_numeric(df['Gender'], errors='coerce')  # Convert to numeric with handling errors
+df['MaritalStatus'] = pd.to_numeric(df['MaritalStatus'], errors='coerce')
+
+df
+
+# Check for null values in each column
+null_columns = df.isnull().sum()
+
+# Filter columns with null values
+columns_with_nulls = null_columns[null_columns > 0]
+
+# Print columns with null values
+print("Columns with null values:")
+print(columns_with_nulls)
+
+"""##### Drop rows with null values"""
+
+df = df.dropna()
+
+df
+
+"""##### Check columns with float and convert to int"""
+
+float_columns = df.select_dtypes(include='float64').columns
+
+# Convert float columns to int64 using .loc to avoid the warning
+df.loc[:, float_columns] = df[float_columns].astype('int64')
+
+df
+
+df.to_csv('New Polaris Data edited.csv', index=False)
+
+"""##### Load new csv file"""
+
+df_new = pd.read_csv('./New Polaris Data edited.csv')
+df_new
+
+"""##### Describe the dataset"""
+
+df_new.describe()
+
+"""##### Count the unique values and their numbers"""
+
+attrition_counts = df['Attrition'].value_counts()
+
+# Print the unique values and their counts
+print("Unique values and their counts in the 'Attrition' column:")
+print(attrition_counts)
+
+"""##### Balance dataset using SMOTE as the dataset is not balanced"""
+
+from imblearn.over_sampling import SMOTE
+from sklearn.model_selection import train_test_split
+import pandas as pd
+
+# Assuming 'target_variable' is the name of your target variable
+target_variable = 'Attrition'
+
+# Identify feature columns (excluding the target variable)
+feature_cols = [col for col in df.columns if col != target_variable]
+
+# Separate features and target variable
+X = df[feature_cols]
+y = df[target_variable]
+
+# Split the data into training and testing sets
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+
+# Apply SMOTE to the training set
+smote = SMOTE(random_state=42)
+X_train_resampled, y_train_resampled = smote.fit_resample(X_train, y_train)
+
+# Display the class distribution before and after SMOTE
+print("Class distribution before SMOTE:")
+print(y_train.value_counts())
+
+print("\nClass distribution after SMOTE:")
+print(pd.Series(y_train_resampled).value_counts())
+
+# Create an SVM model
+from sklearn.svm import SVC
+svm_model = SVC()
+
+# Define the parameter grid to search
+param_grid = {
+    'C': [0.1, 1, 10, 100],
+    'kernel': ['linear', 'rbf', 'poly'],
+    'degree': [2, 3, 4],
+}
+
+from sklearn.model_selection import GridSearchCV
+# Create a GridSearchCV object
+grid_search = GridSearchCV(svm_model, param_grid, cv=5, scoring='accuracy', n_jobs=-1)
+
+# Fit the GridSearchCV object to the resampled training data
+grid_search.fit(X_train_resampled, y_train_resampled)
+
+# Print the best parameters found by grid search
+print("Best Parameters:", grid_search.best_params_)
+
+# Use the best model from grid search to make predictions on the test set
+y_pred_svm = grid_search.predict(X_test)
+
+y_pred_svm
+
+from sklearn.metrics import classification_report
+# Evaluate the SVM model
+print("Classification Report:")
+print(classification_report(y_test, y_pred_svm))
+
+from sklearn.metrics import confusion_matrix
+import matplotlib.pyplot as plt
+import seaborn as sns
+
+# Calculate confusion matrix
+cm = confusion_matrix(y_test, y_pred_svm)
+
+# Plot the confusion matrix
+plt.figure(figsize=(8, 6))
+sns.heatmap(cm, annot=True, fmt='g', cmap='Blues', cbar=False,
+            xticklabels=['No Attrition', 'Attrition'],
+            yticklabels=['No Attrition', 'Attrition'])
+plt.xlabel('Predicted labels')
+plt.ylabel('True labels')
+plt.title('SVM Confusion Matrix')
+
+"""***Logistic Regression***"""
+
+from sklearn.linear_model import LogisticRegression
+
+# Create a Logistic Regression model with default parameters
+logreg_model = LogisticRegression(max_iter=1000)
+
+logreg_model.fit(X_train_resampled, y_train_resampled)  # Train the model
+
+from sklearn.linear_model import LogisticRegression
+from sklearn.metrics import accuracy_score
+
+# Create a Logistic Regression model
+logreg_model = LogisticRegression(max_iter=1000)  # Increase max_iter for convergence if needed
+
+# Train the model
+logreg_model.fit(X_train_resampled, y_train_resampled)
+
+# Make predictions on the test data
+y_pred = logreg_model.predict(X_test)
+
+# Evaluate the model
+accuracy = accuracy_score(y_test, y_pred)
+print(f"Accuracy: {accuracy * 100:.2f}%")
+
+# Print predicted and actual test data side by side
+print("Predicted\tActual")
+print("---------\t------")
+for pred, actual in zip(y_pred, y_test):
+    print(f"{pred}\t\t{actual}")
+
+y_pred
+
+from sklearn.metrics import classification_report
+# Evaluate the SVM model
+print("Classification Report:")
+print(classification_report(y_test, y_pred))
+
+# Calculate confusion matrix
+cm = confusion_matrix(y_test, y_pred)
+
+# Plot the confusion matrix
+plt.figure(figsize=(8, 6))
+sns.heatmap(cm, annot=True, fmt='g', cmap='Blues', cbar=False,
+            xticklabels=['No Attrition', 'Attrition'],
+            yticklabels=['No Attrition', 'Attrition'])
+plt.xlabel('Predicted labels')
+plt.ylabel('True labels')
+plt.title('Logistic Regression Confusion Matrix')
+
+"""**Decision Tree**"""
+
+from sklearn.tree import DecisionTreeClassifier
+from sklearn.metrics import accuracy_score
+
+# Create a Decision Tree classifier
+tree_model = DecisionTreeClassifier()
+
+# Train the model
+tree_model.fit(X_train_resampled, y_train_resampled)
+
+# Make predictions on the test data
+y_pred_tree = tree_model.predict(X_test)
+
+# Evaluate the model
+accuracy_tree = accuracy_score(y_test, y_pred_tree)
+print(f"Accuracy (Decision Tree): {accuracy_tree * 100:.2f}%")
+
+# Decision tree classification report
+tree_report = classification_report(y_test, y_pred_tree)
+print(tree_report)
+
+# Calculate confusion matrix
+cm_tree = confusion_matrix(y_test, y_pred_tree)
+
+# Plot the confusion matrix
+plt.figure(figsize=(8, 6))
+sns.heatmap(cm_tree, annot=True, fmt='g', cmap='Blues', cbar=False,
+            xticklabels=['No Attrition', 'Attrition'],
+            yticklabels=['No Attrition', 'Attrition'])
+plt.xlabel('Predicted labels')
+plt.ylabel('True labels')
+plt.title('Decision Tree Confusion Matrix')
+
+
+
+
+
